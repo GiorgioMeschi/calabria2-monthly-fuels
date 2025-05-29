@@ -3,7 +3,7 @@
 #%%
 
 from annual_wildfire_susceptibility.susceptibility import Susceptibility
-from risico_operational.settings import TILEPATH, DATAPATH
+from risico_operational.settings import TILES_DIR, DATAPATH
 
 import os
 import multiprocessing
@@ -12,12 +12,12 @@ import time
 import logging
 from functools import wraps
 import shutil
+import pandas as pd
 
 
 #%% inputs
 
-BASEP = DATAPATH  # '/home/sadc/share/project/calabria/data'
-VS = 'v4'
+VS = 'v2'
 CONFIG = {     
     "batches" : 1, 
     "nb_codes_list" : [1],
@@ -46,18 +46,19 @@ CONFIG = {
     "email_pwd" : "" 
 }  
 
-WORKING_DIR = f'{TILEPATH}/susceptibility/{VS}'
-MODEL_PATH = f'{BASEP}/model/{VS}/RF_bilienarspi_100t_15d_15samples.sav'
-X_PATH = f"{BASEP}/model/{VS}/X_no_coords_clip.csv"
+# define if 'historical' of 'operational'
+RUN = 'historical'
 
-# vs = ['v4']
-# for VS in vs:
-#     WORKING_DIR = f'{BASEP}/ML/susceptibility/{VS}'
-#     X_PATH = f"{BASEP}/model/{VS}/X_no_coords.csv"
-#     #open save 3 lines and save it as clip
-#     df = pd.read_csv(X_PATH, index_col=0)
-#     df = df.iloc[0:3,:]
-#     df.to_csv(f"{BASEP}/model/{VS}/X_no_coords_clip.csv")
+WORKING_DIR = f'{TILES_DIR}/susceptibility/{VS}'
+MODEL_PATH = f'{DATAPATH}/model/{VS}/RF_bil_100t_15d_50samples.sav'
+X_PATH = f"{DATAPATH}/model/{VS}/X_no_coords_clip.csv"
+
+if not os.path.exists(X_PATH):
+    x_path = f"{DATAPATH}/model/{VS}/X_merged_no_coords.csv"
+    #open save 3 lines and save it as clip
+    df = pd.read_csv(x_path, index_col=0)
+    df = df.iloc[0:3,:]
+    df.to_csv(X_PATH)
 
 
 def memory_watch_psutil_v2(func, interval=1):
@@ -113,21 +114,23 @@ def memory_watch_psutil_v2(func, interval=1):
 @memory_watch_psutil_v2
 def compute_month_susceptibility(tile, year, month):
 
-    monthly_variable_names = [  'spi_1m',
-                                'spi_3m',
-                                'spi_6m',
-                                'spi_12m',
+    monthly_variable_names = [ 'SPI_1m', 'SPI_3m', 'SPI_6m',
+                                'SPEI_1m', 'SPEI_3m', 'SPEI_6m',
+                                # 'P_1m', 'P_3m', 'P_6m',
+                                # 'Tanomaly_1m', 'Tanomaly_3m', 'Tanomaly_6m',
+                                # 'T_1m', 'T_3m', 'T_6m',            
                                 ]
-    climate_foldername = 'climate' # climate_1m_shift
-    monthly_files = {f'{year}_{month}': {tiffile : f'{TILEPATH}/{tile}/{climate_foldername}/{year}_{month}/{tiffile}_bilinear_epsg3857.tif'
+    
+    climate_foldername = 'climate_1m_shift' if RUN == 'historical' else 'climate' # climate_1m_shift to historical run, climate for operational run
+    monthly_files = {f'{year}_{month}': {tiffile : f'{TILES_DIR}/{tile}/{climate_foldername}/{year}_{month}/{tiffile}_bilinear_epsg3857.tif'
                         for tiffile in monthly_variable_names}
                             }                         
 
-    dem_path = f"{TILEPATH}/{tile}/dem/dem_20m_3857.tif"
-    veg_path = f"{TILEPATH}/{tile}/veg/veg_20m_3857.tif"
+    dem_path = f"{TILES_DIR}/{tile}/dem/dem_20m_3857.tif"
+    veg_path = f"{TILES_DIR}/{tile}/veg/veg_20m_3857.tif"
     optional_input_dict = {}
 
-    working_directory = f'{BASEP}/ML/{tile}/susceptibility/{VS}/{year}_{month}'
+    working_directory = f'{DATAPATH}/ML/{tile}/susceptibility/{VS}/{year}_{month}'
     # output_like = f'{working_directory}/susceptibility/annual_maps/Annual_susc_{year}_{month}.tif'
     # if not os.path.exists(output_like):
 
@@ -194,23 +197,22 @@ def dynamic_worker(task_queue, min_workers=4, max_workers=40, check_interval=5):
 
 # main function 
 def compute_susceptibility(years, months):
-    # set logging
-    # log_filename = f'/home/sadc/share/project/calabria/data/susceptibility/{VS}/susc.log'
-    # os.makedirs(os.path.dirname(log_filename), exist_ok=True)
-    # logging.basicConfig(level=logging.INFO,
-    #                     format = '[%(asctime)s] %(filename)s: {%(lineno)d} %(levelname)s - %(message)s',
-    #                     datefmt ='%H:%M:%S',
-    #                     filename = log_filename)
+
+    if RUN == 'historical':
+        # set logging
+        log_filename = f'{DATAPATH}/susceptibility/{VS}/susc.log'
+        os.makedirs(os.path.dirname(log_filename), exist_ok=True)
+        logging.basicConfig(level=logging.INFO,
+                            format = '[%(asctime)s] %(filename)s: {%(lineno)d} %(levelname)s - %(message)s',
+                            datefmt ='%H:%M:%S',
+                            filename = log_filename)
 
     # turn off all the worning of rasterio and gdal
     logging.getLogger('rasterio').setLevel(logging.ERROR)
     logging.getLogger('osgeo').setLevel(logging.ERROR)
 
-    # years = [YEAR] #list(range(2007, 2019)) 
-    # months = [MONTH] #list(range(1, 13))  
-    tiles_dir = TILEPATH
-    tiles = os.listdir(tiles_dir)
-    tiles = [tile for tile in tiles if os.path.isdir(os.path.join(tiles_dir, tile))]
+    tiles = os.listdir(TILES_DIR)
+    tiles = [tile for tile in tiles if os.path.isdir(os.path.join(TILES_DIR, tile))]
 
     task_queue = multiprocessing.Queue()
     for year in years:
@@ -218,12 +220,16 @@ def compute_susceptibility(years, months):
             for tile in tiles:
                 task_queue.put((year, month, tile))
 
-    dynamic_worker(task_queue,
+    dynamic_worker(task_queue, 
                    check_interval = 8)
 
 
-# if __name__ == "__main__":
-#     compute_susceptibility()
+if RUN == 'historical':
+    years = list(range(2011, 2025))
+    months = list(range(1, 13))
+
+    if __name__ == "__main__":
+        compute_susceptibility(years, months)
 
 
 
