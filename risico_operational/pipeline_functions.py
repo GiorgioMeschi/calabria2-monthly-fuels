@@ -11,79 +11,46 @@ from rasterio.mask import mask as riomask
 import time
 import json
 import subprocess
-import boto3
+# import boto3
 import logging 
 
-from risico_operational.settings import TILEPATH, SPI_DATA
+from risico_operational.settings import TILES_DIR
 
 
+ 
 
-def download_spi(sh_file: str):
+def clip_to_tiles(var, aggr, year: str, month: str, tile: str, 
+                  tile_df: gpd.GeoDataFrame, current_year: str, current_month: str):
 
-    def assume_role(role_arn: str, session_name: str, duration_seconds: int = 3600) -> dict:
-        """
-        Calls AWS STS to assume the given role and returns temporary credentials.
-        """
-        sts_client = boto3.client("sts")
-        response = sts_client.assume_role(
-            RoleArn=role_arn,
-            RoleSessionName=session_name,
-            DurationSeconds=duration_seconds
-        )
-        return response["Credentials"]
-
-    # Parameters: adjust these as needed
-    role_arn = "arn:aws:iam::730335439410:role/giorgios-s3-reader"
-    session_name = "Accesso"
-
-    # Step 1: Assume the role and retrieve temporary credentials
-    credentials = assume_role(role_arn, session_name)
-    
-    # Step 2: Export credentials as environment variables (like your manual export commands)
-    os.environ["AWS_ACCESS_KEY_ID"] = credentials["AccessKeyId"]
-    os.environ["AWS_SECRET_ACCESS_KEY"] = credentials["SecretAccessKey"]
-    os.environ["AWS_SESSION_TOKEN"] = credentials["SessionToken"]
-    
-    logging.info("Temporary credentials acquired and exported to environment variables.")
-    
-    try:
-        subprocess.run(["bash", sh_file], check=True)
-        logging.info("download.sh executed successfully.")
-    except subprocess.CalledProcessError as e:
-        logging.info(f"An error occurred while running download.sh: {e}")
-
-
-
-def clip_to_tiles(aggr: list, year: int, month: int, tile: str, tile_df: gpd.GeoDataFrame,
-                  current_year: int, current_month: int):
     '''
-    clip the raw spi and save it in the proper month folder
-    aggr defines the aggregation of the SPI (i.e, 1, 3, 6, 12 months)
-    year is the year of the SPI
-    month is the month of the SPI
-    tile is the tile to clip the data on
-    tile_df is the GeoDataFrame with the tiles
+    clip data on server drought to calabria and resample it to 20m resolution.
+    it works for SPI and SPEI vars.
     '''
 
-    clim_tile_num = 4 # include italy
-    base_folderpath = os.path.join(SPI_DATA, str(aggr), str(year), f'{month:02}')
-    day_of_interest = os.listdir(base_folderpath)[-1]
-    folderpath = os.path.join(base_folderpath, day_of_interest)
-    tile_file = os.path.join(folderpath, f'CHIRPS2-SPI{aggr}_{year}{month:02}{day_of_interest}_tile{clim_tile_num}.tif')
-    out_folder = os.path.join(TILEPATH, tile, 'climate', f'{current_year}_{current_month}')
+    # folderpath changes depending on the variables
+    if var == 'SPI':
+        basep = f'/home/drought/drought_share/archive/Italy/{var}/MCM/maps/{year}/{month:02}'
+        day = os.listdir(basep)[-1]
+        name = f'{var}{aggr}-MCM_{year}{month:02}{day}.tif'
+        path = f'{basep}/{day}/{name}'
+
+    elif var == 'SPEI':
+        basep = f'/home/drought/drought_share/archive/Italy/{var}/MCM-DROPS/maps/{year}/{month:02}'
+        day = os.listdir(basep)[-1]
+        name = f'{var}{aggr}-MCM-DROPS_{year}{month:02}{day}.tif'
+        path = f'{basep}/{day}/{name}'
+
+    out_folder = os.path.join(TILES_DIR, tile, 'climate', f'{current_year}_{current_month}')
     os.makedirs(out_folder, exist_ok=True)
-    wgs_file = os.path.join(out_folder, f'spi_{aggr}m_wgs.tif')
-    reproj_out_file = os.path.join(out_folder, f'spi_{aggr}m_bilinear_epsg3857.tif') # out filename
-
-    if  os.path.exists(reproj_out_file):
-        os.remove(reproj_out_file)
+    wgs_file = os.path.join(out_folder, f'{var}_{aggr}m_orig.tif')
+    reproj_out_file = os.path.join(out_folder, f'{var}_{aggr}m_bilinear_epsg3857.tif') # out filename
 
     # clip and reproject
     tile_geom = tile_df[tile_df['id_sorted'] == int(tile[5:])].geometry.values[0]
     # buffer 5 km in degrees
     tile_geom = tile_geom.buffer(0.05)
     
-    with rio.open(tile_file) as src:
+    with rio.open(path) as src:
         out_image, out_transform = riomask(src, [tile_geom], crop = True)
         out_meta = src.meta.copy()
         out_meta.update({
@@ -94,8 +61,7 @@ def clip_to_tiles(aggr: list, year: int, month: int, tile: str, tile_df: gpd.Geo
         with rio.open(wgs_file, 'w', **out_meta) as dst:
             dst.write(out_image)
     
-    # reference_file_wgs = os.path.join(TILEPATH, tile, 'dem', 'dem_wgs.tif')
-    reference_file = os.path.join(TILEPATH, tile, 'dem', 'dem_20m_3857.tif')
+    reference_file = os.path.join(TILES_DIR, tile, 'dem', 'dem_20m_3857.tif')
     with rio.open(reference_file) as ref:
         bounds = ref.bounds  # Extract bounds (left, bottom, right, top)
         xres = ref.transform[0]  # Pixel width
@@ -115,12 +81,10 @@ def clip_to_tiles(aggr: list, year: int, month: int, tile: str, tile_df: gpd.Geo
     os.remove(wgs_file)
 
 
-
-
 def merge_susc_tiles(tiles, year, month, outfolder):
 
-    vs = 'v4'
-    files_to_merge = [f"{TILEPATH}/{tile}/susceptibility/{vs}/{year}_{month}/susceptibility/annual_maps/Annual_susc_{year}_{month}.tif"
+    vs = 'v2'
+    files_to_merge = [f"{TILES_DIR}/{tile}/susceptibility/{vs}/{year}_{month}/susceptibility/annual_maps/Annual_susc_{year}_{month}.tif"
                     for tile in tiles]
 
     outfile = os.path.join(outfolder, f'susc_calabria_{year}_{month}.tif')
@@ -148,11 +112,9 @@ def merge_susc_tiles(tiles, year, month, outfolder):
 def generate_fuel_map(merged_susc_file, threshold_file, veg_path, mapping_path, out_file):
 
     fft = ff.FireTools()
-    Raster = gt.Raster()
 
     thresholds = json.load(open(threshold_file))
     tr1, tr2 = thresholds['lv1'], thresholds['lv2']
-
 
     inputs = dict(
         susc_path = merged_susc_file,
@@ -162,7 +124,7 @@ def generate_fuel_map(merged_susc_file, threshold_file, veg_path, mapping_path, 
         out_hazard_file = out_file
         )
 
-    fft.hazard_12cl_assesment(**inputs) #save fule map file on 'out_file' location
+    fft.hazard_12cl_assesment(**inputs) #save fuel map file on 'out_file' location
     
 
 def reproject_raster_as(in_file, out_file, reference_file, input_crs = 'EPSG:3857', working_crs = 'EPSG:4326'):

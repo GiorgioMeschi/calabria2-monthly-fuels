@@ -1,28 +1,30 @@
 
+#%%
 import os
 import json
 import numpy as np
 from geospatial_tools import FF_tools as ff
 from geospatial_tools import geotools as gt
 
+from home import DATAPATH
+
 fft = ff.FireTools()
 Raster = gt.Raster()
 
 #%%
 
-vs_susc = 'v4'
-vs_fuel = 'v4_fixed' # change the aggregation file veg to FT
-folder_susc = f'/home/sadc/share/project/calabria/data/susceptibility/{vs_susc}'
+vs_susc = 'v2'
+folder_susc = f'{DATAPATH}/susceptibility/{vs_susc}'
 susc_names = [i for i in os.listdir(folder_susc) if i.endswith('.tif')]
-threashold_file = f'/home/sadc/share/project/calabria/data/susceptibility/{vs_susc}/thresholds/thresholds.json'
+threashold_file = f'{DATAPATH}/susceptibility/{vs_susc}/thresholds/thresholds.json'
 thresholds = json.load(open(threashold_file))
 tr1, tr2 = thresholds['lv1'], thresholds['lv2']
-veg_path = '/home/sadc/share/project/calabria/data/raw/vegetation/fuel_type.tif'
-mapping_path = '/home/sadc/share/project/calabria/data/raw/vegetation/veg_to_tf_fake.json' # already the input is with aggregation
-out_folder = f'/home/sadc/share/project/calabria/data/fuel_maps/{vs_fuel}'
+veg_path = f'{DATAPATH}/raw/vegetation/fuel_type.tif'
+mapping_path = f'{DATAPATH}/raw/vegetation/veg_to_tf_fake.json' # already the input is with aggregation
+out_folder = f'{DATAPATH}/fuel_maps/{vs_susc}'
 os.makedirs(out_folder, exist_ok=True)
-susc_class_oufolder = f'/home/sadc/share/project/calabria/data/susceptibility/{vs_susc}/susc_classified'
-ft_outfolder = f'/home/sadc/share/project/calabria/data/fuel_type_4cl/{vs_fuel}'
+susc_class_oufolder = f'{DATAPATH}/susceptibility/{vs_susc}/susc_classified'
+ft_outfolder = f'{DATAPATH}/fuel_type_4cl/{vs_susc}'
 os.makedirs(susc_class_oufolder, exist_ok=True)
 os.makedirs(ft_outfolder, exist_ok=True)
 
@@ -64,19 +66,18 @@ with mp.Pool(processes=6) as pool:
 
 #%% get the static fuel map
 
-vs_susc = 'static'
-vs_fuel = 'static_fixed' # change the aggregation file veg to FT
+vs_susc = 'static_v2'
 
-susc_file = f'/home/sadc/share/project/calabria/data/susceptibility/{vs_susc}/susceptibility/SUSCEPTIBILITY.tif'
-threashold_file = f'/home/sadc/share/project/calabria/data/susceptibility/{vs_susc}/thresholds/thresholds.json'
+susc_file = f'{DATAPATH}/susceptibility/{vs_susc}/susceptibility/SUSCEPTIBILITY.tif'
+threashold_file = f'{DATAPATH}/susceptibility/{vs_susc}/thresholds/thresholds.json'
 thresholds = json.load(open(threashold_file))
 tr1, tr2 = thresholds['lv1'], thresholds['lv2']
-veg_path = '/home/sadc/share/project/calabria/data/raw/vegetation/fuel_type.tif'
-mapping_path = '/home/sadc/share/project/calabria/data/raw/vegetation/veg_to_tf_fake.json' # already the input is with aggregation
-out_folder = f'/home/sadc/share/project/calabria/data/fuel_maps/{vs_fuel}'
+veg_path = f'{DATAPATH}/raw/vegetation/fuel_type.tif'
+mapping_path = f'{DATAPATH}/raw/vegetation/veg_to_tf_fake.json' # already the input is with aggregation
+out_folder = f'{DATAPATH}/fuel_maps/{vs_susc}'
 os.makedirs(out_folder, exist_ok=True)
-susc_class_oufolder = f'/home/sadc/share/project/calabria/data/susceptibility/{vs_susc}/susc_classified'
-ft_outfolder = f'/home/sadc/share/project/calabria/data/fuel_type_4cl/{vs_fuel}'
+susc_class_oufolder = f'{DATAPATH}/susceptibility/{vs_susc}/susc_classified'
+ft_outfolder = f'{DATAPATH}/fuel_type_4cl/{vs_susc}'
 os.makedirs(susc_class_oufolder, exist_ok=True)
 os.makedirs(ft_outfolder, exist_ok=True)
 
@@ -106,3 +107,4 @@ Raster.save_raster_as(ft_arr,
 
 
 # %%
+

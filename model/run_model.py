@@ -47,7 +47,7 @@ CONFIG = {
 }  
 
 # define if 'historical' of 'operational'
-RUN = 'historical'
+RUN = 'operational'
 
 WORKING_DIR = f'{TILES_DIR}/susceptibility/{VS}'
 MODEL_PATH = f'{DATAPATH}/model/{VS}/RF_bil_100t_15d_50samples.sav'
