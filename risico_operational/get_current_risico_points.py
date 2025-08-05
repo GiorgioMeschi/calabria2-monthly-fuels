@@ -226,6 +226,15 @@ def pipeline(date):
          )
     
     fuel12cl_path = f'{out_monthly_fuel_folder}/{fuel_filename}'
+
+    # write a txt with the fuel nam
+    fuel12cl_txt = f'{OUTPUT_DIR}/metadata.txt'
+    if os.path.exists(fuel12cl_txt):
+        os.remove(fuel12cl_txt)
+    with open(fuel12cl_txt, 'w') as f:
+        f.write(f'{fuel_filename}\n')
+    
+    # generate susc, fuel and risico points    
     if not os.path.isfile(fuel12cl_path):
 
         tiles = os.listdir(TILES_DIR)
@@ -266,9 +275,11 @@ def pipeline(date):
 
         #input/output for risico.txt
         dem_path = f'{TOPOGRAPHIC_DATA}/dem_calabria_20m_3857.tif'
-        dem_wgs_path = f'{TOPOGRAPHIC_DATA}/dem_calabria_20m_wgs84.tif'
-        slope_wgs_path = f'{TOPOGRAPHIC_DATA}/slope_calabria_20m_wgs84.tif'
-        aspect_wgs_path = f'{TOPOGRAPHIC_DATA}/aspect_calabria_20m_wgs84.tif'
+        # use already created 100m files for risico
+        dem_wgs_path = f'{TOPOGRAPHIC_DATA}/dem_calabria_100m_wgs.tif'
+        dem_wgs_20m_path = f'{TOPOGRAPHIC_DATA}/dem_calabria_20m_wgs84.tif'
+        slope_wgs_path = f'{TOPOGRAPHIC_DATA}/slope_100m_wgs.tif'
+        aspect_wgs_path = f'{TOPOGRAPHIC_DATA}/aspect_100m_wgs.tif'
         if not os.path.exists(slope_wgs_path): # if slope and aspect already exist dont do it
             # use gdal to create slope and aspect
             logging.info(f'Calcualte slope')
@@ -283,13 +294,18 @@ def pipeline(date):
             reproject_raster_as(temp_aspect_path, aspect_wgs_path, dem_wgs_path)
             os.remove(temp_aspect_path)
 
-
         # reproject fuel map to wgs84
         fuel12_wgs_path = f'{OUTPUT_DIR}/fuel12cl_wgs84.tif'
         if os.path.exists(fuel12_wgs_path):
             os.remove(fuel12_wgs_path)
         reproject_raster_as(fuel12cl_path, fuel12_wgs_path, dem_wgs_path)
         logging.info(f'Fuel12cl reprojected to {fuel12_wgs_path}')
+
+        fuel12_20m_wgs_path = f'{OUTPUT_DIR}/fuel12cl_20m_wgs84.tif'
+        if os.path.exists(fuel12_20m_wgs_path):
+            os.remove(fuel12_20m_wgs_path)
+        reproject_raster_as(fuel12cl_path, fuel12_20m_wgs_path, dem_wgs_20m_path)
+        logging.info(f'Fuel12cl 20m reprojected to {fuel12_20m_wgs_path}')
 
         # create a txt file in which each row has x and y coordinates and the value of the hazard
         risico_outfile = f'{OUTPUT_DIR}/risico_calabria.txt'
@@ -304,12 +320,16 @@ def pipeline(date):
 if __name__ == '__main__':
 
     # get the current date
-    date = dt.now() #- timedelta(days=122)  
+    days = [0]  # days to go back for historical runs - use 1 month before your target if drought data or that month already exist!!
+    output_dir_backup = OUTPUT_DIR
+    for prev_day in days:
 
-    if HISTORICAL_RUN:
-        date_str = date.strftime('%Y%m%d')
-        # if historical run, use the first day of the month
-        OUTPUT_DIR = f'{OUTPUT_DIR}/RUN_HIST_{date_str}'
+        date = dt.now() - timedelta(days=prev_day)  
+
+        if HISTORICAL_RUN:
+            date_str = date.strftime('%Y%m%d')
+            # if historical run, use the first day of the month
+            OUTPUT_DIR = f'{output_dir_backup}/RUN_HIST_{date_str}'
 
     log_filename = f'{OUTPUT_DIR}/logs/pipeline_{date.strftime('%Y-%m-%d')}.log'
     os.makedirs(os.path.dirname(log_filename), exist_ok=True)

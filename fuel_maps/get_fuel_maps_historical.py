@@ -6,6 +6,7 @@ import numpy as np
 from geospatial_tools import FF_tools as ff
 from geospatial_tools import geotools as gt
 
+os.chdir('/home/drought/workspaces/GM/calabria2/processing/calabria2-processing')
 from home import DATAPATH
 
 fft = ff.FireTools()
@@ -41,22 +42,22 @@ def hazard(susc_filename):
         mapping_path = mapping_path,
         out_hazard_file = f"{out_folder}/{hazard_filename}"
         )
-
-    _, susc_class, ft_arr = fft.hazard_12cl_assesment(**inputs)
-    # save
-    Raster.save_raster_as(susc_class, 
-                          f'{susc_class_oufolder}/{susc_filename}',
-                          susc_file, dtype = np.int8(), nodata =0)
-    
-    Raster.save_raster_as(susc_class, 
-                          f'{susc_class_oufolder}/{susc_filename}',
-                          susc_file, dtype = np.int8(), nodata =0)
-    
-    ft_filename = 'ft.tif'
-    if not os.path.exists(f'{ft_outfolder}/{ft_filename}'):
-        Raster.save_raster_as(ft_arr,
-                                f'{ft_outfolder}/{ft_filename}',
-                                susc_file, dtype = np.int8(), nodata =0)
+    if not os.path.exists(f"{out_folder}/{hazard_filename}"):
+        _, susc_class, ft_arr = fft.hazard_12cl_assesment(**inputs)
+        # save
+        Raster.save_raster_as(susc_class, 
+                            f'{susc_class_oufolder}/{susc_filename}',
+                            susc_file, dtype = np.int8(), nodata =0)
+        
+        Raster.save_raster_as(susc_class, 
+                            f'{susc_class_oufolder}/{susc_filename}',
+                            susc_file, dtype = np.int8(), nodata =0)
+        
+        ft_filename = 'ft.tif'
+        if not os.path.exists(f'{ft_outfolder}/{ft_filename}'):
+            Raster.save_raster_as(ft_arr,
+                                    f'{ft_outfolder}/{ft_filename}',
+                                    susc_file, dtype = np.int8(), nodata =0)
 
 import multiprocessing as mp
 with mp.Pool(processes=6) as pool:

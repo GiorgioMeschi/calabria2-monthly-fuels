@@ -10,14 +10,10 @@ import geopandas as gpd
 from rasterio.mask import mask as riomask
 import time
 import json
-import subprocess
-# import boto3
-import logging 
 
-from risico_operational.settings import TILES_DIR
+from risico_operational.settings import TILES_DIR, VS
 
 
- 
 
 def clip_to_tiles(var, aggr, year: str, month: str, tile: str, 
                   tile_df: gpd.GeoDataFrame, current_year: str, current_month: str):
@@ -44,6 +40,12 @@ def clip_to_tiles(var, aggr, year: str, month: str, tile: str,
     os.makedirs(out_folder, exist_ok=True)
     wgs_file = os.path.join(out_folder, f'{var}_{aggr}m_orig.tif')
     reproj_out_file = os.path.join(out_folder, f'{var}_{aggr}m_bilinear_epsg3857.tif') # out filename
+
+    # clean all files in out folder 
+    files_to_clean = os.listdir(out_folder)
+    if len(files_to_clean) != 0:
+        for f in files_to_clean:
+            os.remove(os.path.join(out_folder, f))
 
     # clip and reproject
     tile_geom = tile_df[tile_df['id_sorted'] == int(tile[5:])].geometry.values[0]
@@ -83,8 +85,7 @@ def clip_to_tiles(var, aggr, year: str, month: str, tile: str,
 
 def merge_susc_tiles(tiles, year, month, outfolder):
 
-    vs = 'v2'
-    files_to_merge = [f"{TILES_DIR}/{tile}/susceptibility/{vs}/{year}_{month}/susceptibility/annual_maps/Annual_susc_{year}_{month}.tif"
+    files_to_merge = [f"{TILES_DIR}/{tile}/susceptibility/{VS}/{year}_{month}/susceptibility/annual_maps/Annual_susc_{year}_{month}.tif"
                     for tile in tiles]
 
     outfile = os.path.join(outfolder, f'susc_calabria_{year}_{month}.tif')
