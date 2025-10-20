@@ -10,8 +10,108 @@ import geopandas as gpd
 from rasterio.mask import mask as riomask
 import time
 import json
+from datetime import datetime, timedelta
 
 from risico_operational.settings import TILES_DIR, VS
+
+
+# functions for getting the available SPI files (4 files)
+def get_spi1_rawfile(date): 
+    aggr = 1
+    year = date.strftime('%Y')
+    month = date.strftime('%m')
+    basep = f'/mnt/drought-ita-share/archive/Italy/SPI/MCM/maps/{year}/{month}'
+    try:
+        day = os.listdir(basep)[-1]
+    except:
+        day = None
+    name = f'SPI{aggr}-MCM_{year}{month}{day}.tif'
+    path = f'{basep}/{day}/{name}'
+    return path
+
+def get_spi3_rawfile(date): 
+    aggr = 3
+    year = date.strftime('%Y')
+    month = date.strftime('%m')
+    basep = f'/mnt/drought-ita-share/archive/Italy/SPI/MCM/maps/{year}/{month}'
+    try:
+        day = os.listdir(basep)[-1]
+    except:
+        day = None
+    name = f'SPI{aggr}-MCM_{year}{month}{day}.tif'
+    path = f'{basep}/{day}/{name}'
+    return path
+
+def get_spi6_rawfile(date): 
+    aggr = 6
+    year = date.strftime('%Y')
+    month = date.strftime('%m')
+    basep = f'/mnt/drought-ita-share/archive/Italy/SPI/MCM/maps/{year}/{month}'
+    try:
+        day = os.listdir(basep)[-1]
+    except:
+        day = None
+    name = f'SPI{aggr}-MCM_{year}{month}{day}.tif'
+    path = f'{basep}/{day}/{name}'
+    return path
+
+def get_spei1_rawfile(date): 
+    aggr = 1
+    year = date.strftime('%Y')
+    month = date.strftime('%m')
+    basep = f'/mnt/drought-ita-share/archive/Italy/SPEI/MCM-DROPS/maps/{year}/{month}'
+    try:
+        day = os.listdir(basep)[-1]
+    except:
+        day = None
+    name = f'SPEI{aggr}-MCM-DROPS_{year}{month}{day}.tif'
+    path = f'{basep}/{day}/{name}'
+    return path
+
+def get_spei3_rawfile(date): 
+    aggr = 3
+    year = date.strftime('%Y')
+    month = date.strftime('%m')
+    basep = f'/mnt/drought-ita-share/archive/Italy/SPEI/MCM-DROPS/maps/{year}/{month}'
+    try:
+        day = os.listdir(basep)[-1]
+    except:
+        day = None
+    name = f'SPEI{aggr}-MCM-DROPS_{year}{month}{day}.tif'
+    path = f'{basep}/{day}/{name}'
+    return path
+
+def get_spei6_rawfile(date): 
+    aggr = 6
+    year = date.strftime('%Y')
+    month = date.strftime('%m')
+    basep = f'/mnt/drought-ita-share/archive/Italy/SPEI/MCM-DROPS/maps/{year}/{month}'
+    try:
+        day = os.listdir(basep)[-1]
+    except:
+        day = None
+    name = f'SPEI{aggr}-MCM-DROPS_{year}{month}{day}.tif'
+    path = f'{basep}/{day}/{name}'
+    return path
+
+
+def find_latest(path_fn, date):
+    oldest_date = date - timedelta(days=90)
+    current_date = date
+    found = False
+    while current_date > oldest_date:
+        rawpath = path_fn(current_date)
+        
+        if os.path.isfile(rawpath):
+            found = True
+            break
+        
+        current_date = current_date - timedelta(days=15)
+    if not found:
+        raise ValueError('Could not find data')
+
+    return rawpath, current_date
+
 
 
 
@@ -25,13 +125,13 @@ def clip_to_tiles(var, aggr, year: str, month: str, tile: str,
 
     # folderpath changes depending on the variables
     if var == 'SPI':
-        basep = f'/home/drought/drought_share/archive/Italy/{var}/MCM/maps/{year}/{month:02}'
+        basep = f'/mnt/drought-ita-share/archive/Italy/{var}/MCM/maps/{year}/{month:02}'
         day = os.listdir(basep)[-1]
         name = f'{var}{aggr}-MCM_{year}{month:02}{day}.tif'
         path = f'{basep}/{day}/{name}'
 
     elif var == 'SPEI':
-        basep = f'/home/drought/drought_share/archive/Italy/{var}/MCM-DROPS/maps/{year}/{month:02}'
+        basep = f'/mnt/drought-ita-share/archive/Italy/{var}/MCM-DROPS/maps/{year}/{month:02}'
         day = os.listdir(basep)[-1]
         name = f'{var}{aggr}-MCM-DROPS_{year}{month:02}{day}.tif'
         path = f'{basep}/{day}/{name}'
@@ -41,11 +141,11 @@ def clip_to_tiles(var, aggr, year: str, month: str, tile: str,
     wgs_file = os.path.join(out_folder, f'{var}_{aggr}m_orig.tif')
     reproj_out_file = os.path.join(out_folder, f'{var}_{aggr}m_bilinear_epsg3857.tif') # out filename
 
-    # clean all files in out folder 
-    files_to_clean = os.listdir(out_folder)
-    if len(files_to_clean) != 0:
-        for f in files_to_clean:
-            os.remove(os.path.join(out_folder, f))
+    # clean files if already existing
+    if os.path.exists(wgs_file):
+        os.remove(wgs_file)
+    if os.path.exists(reproj_out_file):
+        os.remove(reproj_out_file)
 
     # clip and reproject
     tile_geom = tile_df[tile_df['id_sorted'] == int(tile[5:])].geometry.values[0]
@@ -85,7 +185,7 @@ def clip_to_tiles(var, aggr, year: str, month: str, tile: str,
 
 def merge_susc_tiles(tiles, year, month, outfolder):
 
-    files_to_merge = [f"{TILES_DIR}/{tile}/susceptibility/{VS}/{year}_{month}/susceptibility/annual_maps/Annual_susc_{year}_{month}.tif"
+    files_to_merge = [f"{TILES_DIR}/{tile}/susceptibility/{VS}/{year}_{month}/annual_maps/Annual_susc_{year}_{month}.tif"
                     for tile in tiles]
 
     outfile = os.path.join(outfolder, f'susc_calabria_{year}_{month}.tif')

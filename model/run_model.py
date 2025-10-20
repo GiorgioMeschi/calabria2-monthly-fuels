@@ -14,6 +14,12 @@ from functools import wraps
 import shutil
 import pandas as pd
 
+import pyproj
+pyproj_path = pyproj.datadir.get_data_dir()
+import os
+os.environ["GTIFF_SRS_SOURCE"] = "EPSG"
+os.environ["PROJ_DATA"] = pyproj_path
+
 
 #%% inputs
 
